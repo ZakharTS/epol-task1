@@ -7,7 +7,7 @@
 #include <CkSFtp.h>
 #include <CkSFtpDir.h>
 #include <CkSFtpFile.h>
-//#include <mysql.h>
+#include <mysql/jdbc.h>
 
 using namespace std;
 
@@ -27,8 +27,6 @@ string value(string line) {
 
 int main()
 {
-    //MYSQL* conn;
-
     string path;
     //path = "cfg.ini";
     cout << "Config file path: ";
@@ -79,13 +77,27 @@ int main()
     if (!sftp.SyncTreeDownload(remoteDir, localDir, 0, 0)) {
         cout << "SFTP: Invalid directory." << endl;
     }
+    else {
+        cout << "SFTP: Success." << endl;
+    }
+    sql::Driver* driver = sql::mysql::get_driver_instance();
+    std::unique_ptr< sql::Connection >
+    con(driver->connect("127.0.0.1:3306", npd.find("sql_user")->second, npd.find("sql_password")->second));
+    con->setSchema(npd.find("sql_database")->second);
+    std::unique_ptr<sql::Statement> stmt(con->createStatement());
     const char* handle = sftp.openDir(remoteDir);
     CkSFtpDir *list = sftp.ReadDir(handle);
     int n = list->get_NumFilesAndDirs();
     for (int i = 0; i < n; i++) {
         CkSFtpFile* obf = list->GetFileObject(i);
-        const char* file = obf->filename();
+        string file = obf->filename();
+        string ins = "INSERT INTO files(`filename`) VALUES ('" + file + "')";
+        stmt->executeQuery(ins);
         cout << file << " copied." << endl;
+    }
+    std::unique_ptr<sql::ResultSet> res(stmt->executeQuery("SELECT * from files"));
+    while (res->next()) {
+        cout << "MySQL: " << res->getString(1) << endl;
     }
     //sftp.SyncTreeDownload("/", "d:/fromsftp", 0, 0);
     //cout << sftp.lastErrorText() << endl;
